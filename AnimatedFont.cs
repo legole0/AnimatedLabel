@@ -1,6 +1,7 @@
+using Godot;
 using Godot.Collections;
 
-namespace Rubicon.Extras.UI;
+namespace AnimatedLabel;
 
 #if TOOLS
 [Tool]

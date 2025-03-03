@@ -1,7 +1,12 @@
-namespace Rubicon.Extras.UI;
+namespace AnimatedLabel;
 
 public enum AnimationStyles
 {
+    /// <summary>
+    /// No animation playing.
+    /// </summary>
+    None,
+    
     /// <summary>
     /// All the letters will play at the same time,
     /// controlled only by the <see cref="AnimatedFont"/>.

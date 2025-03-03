@@ -1,8 +1,9 @@
-
+using System;
+using Godot;
 using System.Linq;
 using Godot.Collections;
 
-namespace Rubicon.Extras.UI;
+namespace AnimatedLabel;
 #if TOOLS
 [Tool, Icon("res://assets/ui/misc/AnimatedLabel.svg")]
 #endif
@@ -46,7 +47,7 @@ namespace Rubicon.Extras.UI;
         set
         {
             _syncFrameSpeed = value;
-            _syncFrameLength = 1 / _syncFrameSpeed;
+            _syncFrameDuration = 1 / _syncFrameSpeed;
         }
     }
 
@@ -101,7 +102,9 @@ namespace Rubicon.Extras.UI;
     private AnimatedLetter[] _letterArray;
     private float _syncFrameSpeed = 24f;
     private float _syncFrameLength;
-    private int _syncFrameIndex = 0;
+    private int _syncFrameIndex;
+    private float _syncFrameDuration;
+    private float _timePassed;
 
     public override void _Ready()
     {
@@ -127,15 +130,17 @@ namespace Rubicon.Extras.UI;
         {
             AnimatedLetter animLetter = _letterArray[i];
             
-            // basic position for spaces or texture-less letters
-            Vector2 position = new Vector2(Separation * i, 0);
+            // fallback rect for spaces or texture-less letters
+            Vector2 position = new Vector2(FontSize + Separation * i, 0);
             Vector2 size = new Vector2(FontSize, FontSize);
             
+            // figure out the actual position and scale if it's a valid letter
             if (animLetter.Texture != null && animLetter.Texture[0] != null)
             {
                 Vector2 texSize = animLetter.Texture[0].GetSize();
+                float texRatio = CalculateTextureRatio(texSize);
                 
-                size = CalculateLetterSize(texSize);
+                size = new Vector2(texSize.X * texRatio, texSize.Y * texRatio);
                 position = new Vector2(texSize.X*i, FontSize - size.Y);
             }
             
@@ -146,12 +151,13 @@ namespace Rubicon.Extras.UI;
             QueueRedraw();
     }
 
-    private Vector2 CalculateLetterSize(Vector2 texSize)
+    private float CalculateTextureRatio(Vector2 texSize)
     {
-        float scale = FontSize / texSize.X;
+        float widthRatio = FontSize / texSize.X;
+        float heightRatio = FontSize / texSize.Y;
+        float ratio = Math.Min(widthRatio, heightRatio);
         
-        Vector2 newSize = new Vector2(texSize.X * scale, FontSize);
-        return newSize;
+        return ratio;
     }
     
     private void UpdateText()
@@ -172,6 +178,8 @@ namespace Rubicon.Extras.UI;
             //GD.Print($"Frame count {frameCount}");
             animLetter.Texture = new Texture2D[frameCount];
             UpdateLetterPositions(false);
+            if((frameCount > 1 && frameCount < _syncFrameLength) || _syncFrameLength <= 0)
+                _syncFrameLength = frameCount;
                 
             for (int frame = 0; frame < frameCount; frame++)
             {
@@ -190,6 +198,7 @@ namespace Rubicon.Extras.UI;
             }
             //GD.Print($"Done setting {SpriteFrames.GetFrameCount(animLetter.Letter)} textures for letter: {animLetter.Letter}");
         }
+        
         QueueRedraw();
     }
 
@@ -197,11 +206,15 @@ namespace Rubicon.Extras.UI;
     {
         foreach (AnimatedLetter animLetter in _letterArray)
         {
-            if (animLetter.Texture != null)
+            int finalIndex = AnimationStyles == AnimationStyles.Synchronized ? _syncFrameIndex : animLetter.FrameIndex;
+            if (animLetter.Texture != null && animLetter.Texture[finalIndex] != null)
             {
-                if (animLetter.Texture[animLetter.FrameIndex] is AtlasTexture letterAtlas)
+                // note to self:
+                // this doesn't take in account letters without texture so that might be an issue
+                Texture2D frameTexture = animLetter.Texture[finalIndex];
+                if (frameTexture is AtlasTexture letterAtlas)
                 {
-                    //GD.Print($"drawing atlastexture letter {animLetter.Letter}");
+                    //GD.Print($"drawing AtlasTexture letter {animLetter.Letter}");
                     // AtlasTexture drawing
                     Texture2D atlas = letterAtlas.Atlas;
                     Rect2 sourceRect = letterAtlas.Region;
@@ -213,9 +226,9 @@ namespace Rubicon.Extras.UI;
                     
                     continue;
                 }
-                //GD.Print($"drawing texture2d letter {animLetter.Letter}");
+                //GD.Print($"drawing Texture2D letter {animLetter.Letter}");
                 // Drawing other Texture2D derivatives
-                DrawTextureRect(animLetter.Texture[animLetter.FrameIndex],
+                DrawTextureRect(frameTexture,
                     animLetter.Rect,
                     false,
                     Modulate);
@@ -223,8 +236,29 @@ namespace Rubicon.Extras.UI;
         }
     }
     
-    public override void _PhysicsProcess(double delta)
+    public override void _Process(double delta)
     {
+        if (AnimationStyles != AnimationStyles.Synchronized)
+            return;
         
+        _timePassed += (float)delta;
+        
+        if (_syncFrameIndex > _syncFrameLength)
+        {
+            _syncFrameIndex = 0;
+            _timePassed = 0;
+        }
+        
+        _syncFrameIndex = GetCurrentFrame();
+    }
+
+    public int GetCurrentFrame()
+    {
+        int timeToFrame = (int)(_timePassed / _syncFrameDuration);
+        GD.Print("frame: "+timeToFrame);
+        GD.Print("length: "+_syncFrameLength);
+        GD.Print("passed: "+_timePassed);
+        GD.Print("duration: "+_syncFrameDuration);
+        return timeToFrame;
     }
 }

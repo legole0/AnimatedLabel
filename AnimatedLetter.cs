@@ -1,4 +1,6 @@
-namespace Rubicon.Extras.UI;
+using Godot;
+
+namespace AnimatedLabel;
 
 public class AnimatedLetter(string letter)
 {
